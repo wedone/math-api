@@ -16,6 +16,9 @@ RUN apk add --no-cache \
 # 设置工作目录
 WORKDIR /app
 
+# 提前创建层依赖的目录结构（解决复制文件时目录不存在的问题）
+RUN mkdir -p ./layers/mathjax-node-layer/nodejs/
+
 # 复制依赖描述文件（优先复制以利用 Docker 缓存）
 COPY package.json yarn.lock ./
 COPY layers/mathjax-node-layer/nodejs/package.json ./layers/mathjax-node-layer/nodejs/
