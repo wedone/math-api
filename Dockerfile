@@ -1,38 +1,18 @@
-# 基于 Node.js 16 镜像（与 CI 测试的 Node 版本范围匹配，且兼容项目依赖）
+基于 Node.js 16 镜像（与 CI 测试的 Node 版本范围匹配，且兼容项目依赖）
 FROM node:16-alpine
-
-# 安装 sharp 依赖的系统库（libvips 及相关依赖）
-RUN apk add --no-cache \
-    vips-dev \
-    fftw-dev \
-    libexif-dev \
-    libjpeg-turbo-dev \
-    libpng-dev \
-    libwebp-dev \
-    tiff-dev \
-    giflib-dev \
-    && rm -rf /var/cache/apk/*
-
-# 设置工作目录
+安装 sharp 依赖的系统库（libvips 及相关依赖）
+RUN apk add --no-cachevips-devfftw-devlibexif-devlibjpeg-turbo-devlibpng-devlibwebp-devtiff-devgiflib-dev&& rm -rf /var/cache/apk/*
+设置工作目录
 WORKDIR /app
-
-# 提前创建层依赖的目录结构（解决复制文件时目录不存在的问题）
-RUN mkdir -p ./layers/mathjax-node-layer/nodejs/
-
-# 复制依赖描述文件（优先复制以利用 Docker 缓存）
+复制项目根目录的依赖描述文件（优先利用缓存）
 COPY package.json yarn.lock ./
-COPY layers/mathjax-node-layer/nodejs/package.json ./layers/mathjax-node-layer/nodejs/
-
-# 安装生产环境依赖（使用 yarn 与项目脚本保持一致）
-# 先安装层依赖，再安装项目依赖
-RUN cd layers/mathjax-node-layer/nodejs && yarn install --production \
-    && cd /app && yarn install --production
-
-# 复制项目所有代码
+先安装项目根目录的生产依赖（利用缓存）
+RUN yarn install --production
+复制整个项目代码（包括 layers 目录下的文件）
 COPY . .
-
-# 暴露应用端口（与 src/app.js 中 Express 服务端口一致）
+安装 layers 目录下的依赖（此时 layers 目录已通过 COPY . . 复制到容器中）
+RUN cd layers/mathjax-node-layer/nodejs && yarn install --production
+暴露应用端口
 EXPOSE 3000
-
-# 启动命令（对应 package.json 中的 "start" 脚本）
+启动命令
 CMD ["yarn", "start"]
