@@ -1,4 +1,4 @@
-const svg2png = require('svg2png');
+const sharp = require('sharp'); // 替换 svg2png 为 sharp
 
 /** @typedef {{ input: 'latex', inline?: boolean } | { input: 'mathml' }} InputDefinition */
 /** @typedef {{ output: 'mathml' | 'svg' } | { output: 'png', width?: number, height?: number }} OutputDefinition */
@@ -137,7 +137,16 @@ exports.render = async (event) => {
 
             const svg = MathJax.startup.adaptor.innerHTML(res);
             const { width, height } = event;
-            const data = await svg2png(svg, { width, height });
+            
+            // 使用 sharp 替代 svg2png 处理 SVG 转 PNG
+            const svgBuffer = Buffer.from(svg); // 将 SVG 字符串转为 Buffer
+            const data = await sharp(svgBuffer)
+                .resize(width, height, { 
+                    fit: 'contain',      // 保持比例，不裁剪
+                    withoutEnlargement: true  // 不放大原图
+                })
+                .png()
+                .toBuffer();
 
             return { contentType: RESPONSE_TYPES.png, isBase64Encoded: true, data: data.toString('base64') };
         }
