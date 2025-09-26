@@ -1,38 +1,45 @@
-# 基于 Node.js 16 镜像（与 CI 测试的 Node 版本范围匹配，且兼容项目依赖）
-FROM node:16-alpine
+name: Push Docker to GHCR
 
-# 安装 sharp 依赖的系统库（libvips 及相关依赖）
-RUN apk add --no-cache \
-    vips-dev \
-    fftw-dev \
-    libexif-dev \
-    libjpeg-turbo-dev \
-    libpng-dev \
-    libwebp-dev \
-    tiff-dev \
-    giflib-dev \
-    && rm -rf /var/cache/apk/*
+# 触发条件：仅手动触发
+on:
+  workflow_dispatch:
 
-# 设置工作目录
-WORKDIR /app
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write  # 授予推送镜像到 GHCR 的权限
+      contents: read   # 授予读取代码的权限
 
-# 提前创建层依赖的目录结构（解决复制文件时目录不存在的问题）
-RUN mkdir -p ./layers/mathjax-node-layer/nodejs/
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
 
-# 复制依赖描述文件（优先复制以利用 Docker 缓存）
-COPY package.json yarn.lock ./
-COPY layers/mathjax-node-layer/nodejs/package.json ./layers/mathjax-node-layer/nodejs/
+      - name: 设置 Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-# 安装生产环境依赖（使用 yarn 与项目脚本保持一致）
-# 先安装层依赖，再安装项目依赖
-RUN cd layers/mathjax-node-layer/nodejs && yarn install --production \
-    && cd /app && yarn install --production
+      - name: 登录到 GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}  # 用户名即 GitHub 用户名
+          password: ${{ secrets.GITHUB_TOKEN }}  # 自动生成的令牌，无需手动配置
 
-# 复制项目所有代码
-COPY . .
+      - name: 提取镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/math-api  # 镜像名格式：ghcr.io/用户名/项目名
+          tags: |
+            type=sha,format=short  # 用 commit SHA 作为标签（短格式）
+            type=ref,event=branch  # 用分支名作为标签（如 master）
+            type=semver,pattern={{version}},from=package.json  # 从 package.json 提取版本号作为标签
 
-# 暴露应用端口（与 src/app.js 中 Express 服务端口一致）
-EXPOSE 3000
-
-# 启动命令（对应 package.json 中的 "start" 脚本）
-CMD ["yarn", "start"]
+      - name: 构建并推送 Docker 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .  # 构建上下文为项目根目录
+          push: true  # 推送镜像
+          tags: ${{ steps.meta.outputs.tags }}  # 使用上面生成的标签
+          cache-from: type=gha  # 使用 GitHub Actions 缓存加速构建
+          cache-to: type=gha,mode=max
