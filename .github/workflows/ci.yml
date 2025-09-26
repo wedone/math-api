@@ -1,9 +1,8 @@
 name: Push Docker to GHCR
 
-# 触发条件：推送到 master 分支时执行
+# 触发条件：仅手动触发
 on:
-  push:
-    branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build-and-push:
